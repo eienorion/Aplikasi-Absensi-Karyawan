@@ -200,11 +200,16 @@ class ApiService {
   static Future<List<Map<String, dynamic>>> getAttendances({
     int? month,
     int? year,
+    int? userId,
   }) async {
     final String baseUrl = await getBaseUrl();
     String endpoint = '$baseUrl/attendances';
 
     final Map<String, String> query = {};
+
+    if (userId != null) {
+      query['user_id'] = userId.toString();
+    }
 
     if (month != null) {
       query['month'] = month.toString();
@@ -224,9 +229,19 @@ class ApiService {
     );
 
     final Map<String, dynamic> data = _handleJsonResponse(response);
-    final List<dynamic> records = data['data'] ?? [];
 
-    return records.map((item) => item as Map<String, dynamic>).toList();
+    final dynamic rawData = data['data'];
+
+    if (rawData is List) {
+      return rawData.map((item) => item as Map<String, dynamic>).toList();
+    }
+
+    if (rawData is Map<String, dynamic> && rawData['data'] is List) {
+      final List<dynamic> records = rawData['data'] as List<dynamic>;
+      return records.map((item) => item as Map<String, dynamic>).toList();
+    }
+
+    return [];
   }
 
   static Future<Map<String, dynamic>> getSummary() async {
@@ -280,6 +295,23 @@ class ApiService {
     }
 
     throw Exception(message);
+  }
+
+  static Future<Map<String, dynamic>> getOperationalSetting() async {
+    final String baseUrl = await getBaseUrl();
+
+    final http.Response response = await http.get(
+      Uri.parse('$baseUrl/operational-setting'),
+      headers: {'Accept': 'application/json'},
+    );
+
+    final Map<String, dynamic> data = _handleJsonResponse(response);
+
+    if (data['data'] is Map<String, dynamic>) {
+      return data['data'] as Map<String, dynamic>;
+    }
+
+    return data;
   }
 }
 
@@ -466,6 +498,100 @@ class _LoginScreenState extends State<LoginScreen> {
     Navigator.push(
       context,
       MaterialPageRoute(builder: (_) => const RegisterScreen()),
+    );
+  }
+
+  Widget buildOperationalBadge() {
+    return FutureBuilder<Map<String, dynamic>>(
+      future: ApiService.getOperationalSetting(),
+      builder: (context, snapshot) {
+        if (snapshot.connectionState == ConnectionState.waiting) {
+          return buildStatusChip(
+            label: 'Memuat',
+            subLabel: '...',
+            color: AppColors.blue,
+            bg: AppColors.blueBg,
+            border: AppColors.blueBorder,
+          );
+        }
+
+        if (snapshot.hasError) {
+          return buildStatusChip(
+            label: 'Offline',
+            subLabel: 'Server',
+            color: AppColors.amber,
+            bg: AppColors.amberBg,
+            border: AppColors.amberBorder,
+          );
+        }
+
+        final Map<String, dynamic> setting = snapshot.data ?? {};
+
+        final bool isOperational =
+            setting['is_operational_now'] == true ||
+            setting['is_operational_now'] == 1;
+
+        final String openTime = setting['open_time']?.toString() ?? '--:--';
+        final String closeTime = setting['close_time']?.toString() ?? '--:--';
+
+        return buildStatusChip(
+          label: isOperational ? 'Operasional' : 'Tutup',
+          subLabel: '$openTime - $closeTime',
+          color: isOperational ? AppColors.green : AppColors.amber,
+          bg: isOperational ? AppColors.greenBg : AppColors.amberBg,
+          border: isOperational ? AppColors.greenBorder : AppColors.amberBorder,
+        );
+      },
+    );
+  }
+
+  Widget buildStatusChip({
+    required String label,
+    required String subLabel,
+    required Color color,
+    required Color bg,
+    required Color border,
+  }) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+      decoration: BoxDecoration(
+        color: bg,
+        borderRadius: BorderRadius.circular(20),
+        border: Border.all(color: border, width: 0.5),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.end,
+        children: [
+          Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Container(
+                width: 6,
+                height: 6,
+                decoration: BoxDecoration(color: color, shape: BoxShape.circle),
+              ),
+              const SizedBox(width: 6),
+              Text(
+                label,
+                style: GoogleFonts.plusJakartaSans(
+                  fontSize: 11,
+                  color: color,
+                  fontWeight: FontWeight.w600,
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 2),
+          Text(
+            subLabel,
+            style: GoogleFonts.plusJakartaSans(
+              fontSize: 9,
+              color: color.withOpacity(0.75),
+              fontWeight: FontWeight.w500,
+            ),
+          ),
+        ],
+      ),
     );
   }
 
@@ -1009,12 +1135,130 @@ class EmployeeHomeScreen extends StatelessWidget {
     );
   }
 
+  Widget buildOperationalBadge() {
+    return FutureBuilder<Map<String, dynamic>>(
+      future: ApiService.getOperationalSetting(),
+      builder: (context, snapshot) {
+        if (snapshot.connectionState == ConnectionState.waiting) {
+          return buildStatusChip(
+            label: 'Memuat',
+            subLabel: '...',
+            color: AppColors.blue,
+            bg: AppColors.blueBg,
+            border: AppColors.blueBorder,
+          );
+        }
+
+        if (snapshot.hasError) {
+          return buildStatusChip(
+            label: 'Offline',
+            subLabel: 'Server',
+            color: AppColors.amber,
+            bg: AppColors.amberBg,
+            border: AppColors.amberBorder,
+          );
+        }
+
+        final Map<String, dynamic> setting = snapshot.data ?? {};
+
+        final bool isOperational =
+            setting['is_operational_now'] == true ||
+            setting['is_operational_now'] == 1;
+
+        final String openTime = setting['open_time']?.toString() ?? '--:--';
+        final String closeTime = setting['close_time']?.toString() ?? '--:--';
+
+        return buildStatusChip(
+          label: isOperational ? 'Operasional' : 'Tutup',
+          subLabel: '$openTime - $closeTime',
+          color: isOperational ? AppColors.green : AppColors.amber,
+          bg: isOperational ? AppColors.greenBg : AppColors.amberBg,
+          border: isOperational ? AppColors.greenBorder : AppColors.amberBorder,
+        );
+      },
+    );
+  }
+
+  Widget buildStatusChip({
+    required String label,
+    required String subLabel,
+    required Color color,
+    required Color bg,
+    required Color border,
+  }) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+      decoration: BoxDecoration(
+        color: bg,
+        borderRadius: BorderRadius.circular(20),
+        border: Border.all(color: border, width: 0.5),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.end,
+        children: [
+          Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Container(
+                width: 6,
+                height: 6,
+                decoration: BoxDecoration(color: color, shape: BoxShape.circle),
+              ),
+              const SizedBox(width: 6),
+              Text(
+                label,
+                style: GoogleFonts.plusJakartaSans(
+                  fontSize: 11,
+                  color: color,
+                  fontWeight: FontWeight.w600,
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 2),
+          Text(
+            subLabel,
+            style: GoogleFonts.plusJakartaSans(
+              fontSize: 9,
+              color: color.withOpacity(0.75),
+              fontWeight: FontWeight.w500,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  String getInitials(String name) {
+    final cleanName = name.trim();
+
+    if (cleanName.isEmpty) {
+      return 'US';
+    }
+
+    final parts = cleanName
+        .split(' ')
+        .where((part) => part.isNotEmpty)
+        .toList();
+
+    if (parts.length >= 2) {
+      return '${parts[0][0]}${parts[1][0]}'.toUpperCase();
+    }
+
+    if (parts[0].length >= 2) {
+      return parts[0].substring(0, 2).toUpperCase();
+    }
+
+    return parts[0][0].toUpperCase();
+  }
+
   @override
   Widget build(BuildContext context) {
     final today = DateFormat(
       'EEEE, dd MMMM yyyy',
       'id_ID',
     ).format(DateTime.now());
+
     final timeNow = DateFormat('HH:mm', 'id_ID').format(DateTime.now());
     final hour = DateTime.now().hour;
 
@@ -1026,309 +1270,318 @@ class EmployeeHomeScreen extends StatelessWidget {
         ? 'Selamat sore'
         : 'Selamat malam';
 
-    final parts = employeeName.trim().split(' ');
-    final initials = parts.length >= 2
-        ? '${parts[0][0]}${parts[1][0]}'.toUpperCase()
-        : employeeName.substring(0, parts[0].length >= 2 ? 2 : 1).toUpperCase();
+    final initials = getInitials(employeeName);
 
     return Scaffold(
       backgroundColor: AppColors.bgDark,
       body: SafeArea(
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            // Top bar
-            Padding(
-              padding: const EdgeInsets.fromLTRB(24, 20, 20, 0),
-              child: Row(
-                children: [
-                  Container(
-                    padding: const EdgeInsets.symmetric(
-                      horizontal: 10,
-                      vertical: 6,
+        child: LayoutBuilder(
+          builder: (context, constraints) {
+            return Center(
+              child: ConstrainedBox(
+                constraints: const BoxConstraints(maxWidth: 430),
+                child: SingleChildScrollView(
+                  child: ConstrainedBox(
+                    constraints: BoxConstraints(
+                      minHeight: constraints.maxHeight,
                     ),
-                    decoration: BoxDecoration(
-                      color: AppColors.surfaceDark,
-                      borderRadius: BorderRadius.circular(20),
-                      border: Border.all(
-                        color: AppColors.cardBorder,
-                        width: 0.5,
-                      ),
-                    ),
-                    child: Row(
-                      children: [
-                        Container(
-                          width: 18,
-                          height: 18,
-                          decoration: BoxDecoration(
-                            color: AppColors.accent,
-                            borderRadius: BorderRadius.circular(4),
-                          ),
-                          child: const Icon(
-                            Icons.medication_rounded,
-                            color: Colors.white,
-                            size: 11,
-                          ),
-                        ),
-                        const SizedBox(width: 6),
-                        Text(
-                          'Apotek Bunut',
-                          style: GoogleFonts.plusJakartaSans(
-                            fontSize: 11,
-                            fontWeight: FontWeight.w600,
-                            color: AppColors.textPrimary,
-                          ),
-                        ),
-                      ],
-                    ),
-                  ),
-                  const Spacer(),
-                  GestureDetector(
-                    onTap: () => logout(context),
-                    child: Container(
-                      width: 36,
-                      height: 36,
-                      decoration: BoxDecoration(
-                        color: AppColors.surfaceDark,
-                        borderRadius: BorderRadius.circular(10),
-                        border: Border.all(
-                          color: AppColors.cardBorder,
-                          width: 0.5,
-                        ),
-                      ),
-                      child: const Icon(
-                        Icons.logout_rounded,
-                        size: 16,
-                        color: AppColors.textMuted,
-                      ),
-                    ),
-                  ),
-                ],
-              ),
-            ),
-
-            const SizedBox(height: 32),
-
-            // Greeting
-            Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 24),
-              child: Row(
-                children: [
-                  Container(
-                    width: 48,
-                    height: 48,
-                    decoration: BoxDecoration(
-                      color: const Color(0xFF1A3A7A),
-                      borderRadius: BorderRadius.circular(14),
-                      border: Border.all(color: AppColors.accent, width: 0.5),
-                    ),
-                    child: Center(
-                      child: Text(
-                        initials,
-                        style: GoogleFonts.plusJakartaSans(
-                          fontSize: 16,
-                          fontWeight: FontWeight.w600,
-                          color: AppColors.accentLight,
-                        ),
-                      ),
-                    ),
-                  ),
-                  const SizedBox(width: 14),
-                  Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(
-                        greeting,
-                        style: GoogleFonts.plusJakartaSans(
-                          fontSize: 12,
-                          color: AppColors.textMuted,
-                        ),
-                      ),
-                      const SizedBox(height: 2),
-                      Text(
-                        employeeName,
-                        style: GoogleFonts.plusJakartaSans(
-                          fontSize: 18,
-                          fontWeight: FontWeight.w600,
-                          color: AppColors.textPrimary,
-                          letterSpacing: -0.3,
-                        ),
-                      ),
-                    ],
-                  ),
-                ],
-              ),
-            ),
-
-            const SizedBox(height: 24),
-
-            // Date + time banner
-            Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 24),
-              child: Container(
-                width: double.infinity,
-                padding: const EdgeInsets.all(16),
-                decoration: BoxDecoration(
-                  color: AppColors.surfaceDark,
-                  borderRadius: BorderRadius.circular(14),
-                  border: Border.all(color: AppColors.cardBorder, width: 0.5),
-                ),
-                child: Row(
-                  children: [
-                    Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text(
-                          today,
-                          style: GoogleFonts.plusJakartaSans(
-                            fontSize: 12,
-                            color: AppColors.textMuted,
-                          ),
-                        ),
-                        const SizedBox(height: 4),
-                        Text(
-                          timeNow,
-                          style: GoogleFonts.plusJakartaSans(
-                            fontSize: 28,
-                            fontWeight: FontWeight.w600,
-                            color: AppColors.textPrimary,
-                            letterSpacing: -1,
-                          ),
-                        ),
-                      ],
-                    ),
-                    const Spacer(),
-                    Container(
-                      padding: const EdgeInsets.symmetric(
-                        horizontal: 10,
-                        vertical: 5,
-                      ),
-                      decoration: BoxDecoration(
-                        color: AppColors.greenBg,
-                        borderRadius: BorderRadius.circular(20),
-                        border: Border.all(
-                          color: AppColors.greenBorder,
-                          width: 0.5,
-                        ),
-                      ),
-                      child: Row(
+                    child: IntrinsicHeight(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
-                          Container(
-                            width: 6,
-                            height: 6,
-                            decoration: const BoxDecoration(
-                              color: AppColors.green,
-                              shape: BoxShape.circle,
+                          // TOP BAR
+                          Padding(
+                            padding: const EdgeInsets.fromLTRB(24, 20, 20, 0),
+                            child: Row(
+                              children: [
+                                Container(
+                                  padding: const EdgeInsets.symmetric(
+                                    horizontal: 10,
+                                    vertical: 6,
+                                  ),
+                                  decoration: BoxDecoration(
+                                    color: AppColors.surfaceDark,
+                                    borderRadius: BorderRadius.circular(20),
+                                    border: Border.all(
+                                      color: AppColors.cardBorder,
+                                      width: 0.5,
+                                    ),
+                                  ),
+                                  child: Row(
+                                    children: [
+                                      Container(
+                                        width: 18,
+                                        height: 18,
+                                        decoration: BoxDecoration(
+                                          color: AppColors.accent,
+                                          borderRadius: BorderRadius.circular(
+                                            4,
+                                          ),
+                                        ),
+                                        child: const Icon(
+                                          Icons.medication_rounded,
+                                          color: Colors.white,
+                                          size: 11,
+                                        ),
+                                      ),
+                                      const SizedBox(width: 6),
+                                      Text(
+                                        'Apotek Bunut',
+                                        style: GoogleFonts.plusJakartaSans(
+                                          fontSize: 11,
+                                          fontWeight: FontWeight.w600,
+                                          color: AppColors.textPrimary,
+                                        ),
+                                      ),
+                                    ],
+                                  ),
+                                ),
+                                const Spacer(),
+                                GestureDetector(
+                                  onTap: () => logout(context),
+                                  child: Container(
+                                    width: 36,
+                                    height: 36,
+                                    decoration: BoxDecoration(
+                                      color: AppColors.surfaceDark,
+                                      borderRadius: BorderRadius.circular(10),
+                                      border: Border.all(
+                                        color: AppColors.cardBorder,
+                                        width: 0.5,
+                                      ),
+                                    ),
+                                    child: const Icon(
+                                      Icons.logout_rounded,
+                                      size: 16,
+                                      color: AppColors.textMuted,
+                                    ),
+                                  ),
+                                ),
+                              ],
                             ),
                           ),
-                          const SizedBox(width: 6),
-                          Text(
-                            'Operasional',
-                            style: GoogleFonts.plusJakartaSans(
-                              fontSize: 11,
-                              color: AppColors.green,
-                              fontWeight: FontWeight.w500,
+
+                          const SizedBox(height: 32),
+
+                          // GREETING
+                          Padding(
+                            padding: const EdgeInsets.symmetric(horizontal: 24),
+                            child: Row(
+                              children: [
+                                Container(
+                                  width: 48,
+                                  height: 48,
+                                  decoration: BoxDecoration(
+                                    color: const Color(0xFF1A3A7A),
+                                    borderRadius: BorderRadius.circular(14),
+                                    border: Border.all(
+                                      color: AppColors.accent,
+                                      width: 0.5,
+                                    ),
+                                  ),
+                                  child: Center(
+                                    child: Text(
+                                      initials,
+                                      style: GoogleFonts.plusJakartaSans(
+                                        fontSize: 16,
+                                        fontWeight: FontWeight.w600,
+                                        color: AppColors.accentLight,
+                                      ),
+                                    ),
+                                  ),
+                                ),
+                                const SizedBox(width: 14),
+                                Expanded(
+                                  child: Column(
+                                    crossAxisAlignment:
+                                        CrossAxisAlignment.start,
+                                    children: [
+                                      Text(
+                                        greeting,
+                                        style: GoogleFonts.plusJakartaSans(
+                                          fontSize: 12,
+                                          color: AppColors.textMuted,
+                                        ),
+                                      ),
+                                      const SizedBox(height: 2),
+                                      Text(
+                                        employeeName,
+                                        maxLines: 1,
+                                        overflow: TextOverflow.ellipsis,
+                                        style: GoogleFonts.plusJakartaSans(
+                                          fontSize: 18,
+                                          fontWeight: FontWeight.w600,
+                                          color: AppColors.textPrimary,
+                                          letterSpacing: -0.3,
+                                        ),
+                                      ),
+                                    ],
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
+
+                          const SizedBox(height: 24),
+
+                          // DATE + TIME BANNER
+                          Padding(
+                            padding: const EdgeInsets.symmetric(horizontal: 24),
+                            child: Container(
+                              width: double.infinity,
+                              padding: const EdgeInsets.all(16),
+                              decoration: BoxDecoration(
+                                color: AppColors.surfaceDark,
+                                borderRadius: BorderRadius.circular(14),
+                                border: Border.all(
+                                  color: AppColors.cardBorder,
+                                  width: 0.5,
+                                ),
+                              ),
+                              child: Row(
+                                children: [
+                                  Expanded(
+                                    child: Column(
+                                      crossAxisAlignment:
+                                          CrossAxisAlignment.start,
+                                      children: [
+                                        Text(
+                                          today,
+                                          maxLines: 1,
+                                          overflow: TextOverflow.ellipsis,
+                                          style: GoogleFonts.plusJakartaSans(
+                                            fontSize: 12,
+                                            color: AppColors.textMuted,
+                                          ),
+                                        ),
+                                        const SizedBox(height: 4),
+                                        Text(
+                                          timeNow,
+                                          style: GoogleFonts.plusJakartaSans(
+                                            fontSize: 28,
+                                            fontWeight: FontWeight.w600,
+                                            color: AppColors.textPrimary,
+                                            letterSpacing: -1,
+                                          ),
+                                        ),
+                                      ],
+                                    ),
+                                  ),
+                                  const SizedBox(width: 12),
+                                  buildOperationalBadge(),
+                                ],
+                              ),
+                            ),
+                          ),
+
+                          const SizedBox(height: 28),
+
+                          // SECTION LABEL
+                          Padding(
+                            padding: const EdgeInsets.symmetric(horizontal: 24),
+                            child: Text(
+                              'MENU ABSENSI',
+                              style: GoogleFonts.plusJakartaSans(
+                                fontSize: 10,
+                                fontWeight: FontWeight.w600,
+                                color: AppColors.textMuted,
+                                letterSpacing: 1.2,
+                              ),
+                            ),
+                          ),
+
+                          const SizedBox(height: 12),
+
+                          // MENU CARDS
+                          Padding(
+                            padding: const EdgeInsets.symmetric(horizontal: 24),
+                            child: Column(
+                              children: [
+                                _HomeMenuCard(
+                                  icon: Icons.login_rounded,
+                                  iconColor: AppColors.green,
+                                  iconBg: AppColors.greenBg,
+                                  iconBorder: AppColors.greenBorder,
+                                  title: 'Absensi Masuk',
+                                  subtitle: 'Selfie + lokasi saat mulai kerja',
+                                  onTap: () => Navigator.push(
+                                    context,
+                                    MaterialPageRoute(
+                                      builder: (_) => AttendanceScreen(
+                                        employeeId: employeeId,
+                                        employeeName: employeeName,
+                                        attendanceType: 'Masuk',
+                                      ),
+                                    ),
+                                  ),
+                                ),
+                                const SizedBox(height: 10),
+                                _HomeMenuCard(
+                                  icon: Icons.logout_rounded,
+                                  iconColor: AppColors.amber,
+                                  iconBg: AppColors.amberBg,
+                                  iconBorder: AppColors.amberBorder,
+                                  title: 'Absensi Pulang',
+                                  subtitle:
+                                      'Selfie + lokasi saat selesai kerja',
+                                  onTap: () => Navigator.push(
+                                    context,
+                                    MaterialPageRoute(
+                                      builder: (_) => AttendanceScreen(
+                                        employeeId: employeeId,
+                                        employeeName: employeeName,
+                                        attendanceType: 'Pulang',
+                                      ),
+                                    ),
+                                  ),
+                                ),
+                                const SizedBox(height: 10),
+                                _HomeMenuCard(
+                                  icon: Icons.history_rounded,
+                                  iconColor: AppColors.blue,
+                                  iconBg: AppColors.blueBg,
+                                  iconBorder: AppColors.blueBorder,
+                                  title: 'Riwayat Absensi',
+                                  subtitle: 'Lihat catatan absensi pribadi',
+                                  onTap: () {
+                                    Navigator.push(
+                                      context,
+                                      MaterialPageRoute(
+                                        builder: (_) =>
+                                            EmployeeAttendanceHistoryScreen(
+                                              employeeId: employeeId,
+                                              employeeName: employeeName,
+                                            ),
+                                      ),
+                                    );
+                                  },
+                                ),
+                              ],
+                            ),
+                          ),
+
+                          const Spacer(),
+
+                          Padding(
+                            padding: const EdgeInsets.only(bottom: 20, top: 24),
+                            child: Center(
+                              child: Text(
+                                'Apotek Bunut • Sistem Absensi v1.0',
+                                style: GoogleFonts.plusJakartaSans(
+                                  fontSize: 11,
+                                  color: const Color(0x26FFFFFF),
+                                ),
+                              ),
                             ),
                           ),
                         ],
                       ),
                     ),
-                  ],
+                  ),
                 ),
               ),
-            ),
-
-            const SizedBox(height: 28),
-
-            // Section label
-            Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 24),
-              child: Text(
-                'MENU ABSENSI',
-                style: GoogleFonts.plusJakartaSans(
-                  fontSize: 10,
-                  fontWeight: FontWeight.w600,
-                  color: AppColors.textMuted,
-                  letterSpacing: 1.2,
-                ),
-              ),
-            ),
-
-            const SizedBox(height: 12),
-
-            // Cards
-            Expanded(
-              child: Padding(
-                padding: const EdgeInsets.symmetric(horizontal: 24),
-                child: Column(
-                  children: [
-                    _HomeMenuCard(
-                      icon: Icons.login_rounded,
-                      iconColor: AppColors.green,
-                      iconBg: AppColors.greenBg,
-                      iconBorder: AppColors.greenBorder,
-                      title: 'Absensi Masuk',
-                      subtitle: 'Selfie + lokasi saat mulai kerja',
-                      onTap: () => Navigator.push(
-                        context,
-                        MaterialPageRoute(
-                          builder: (_) => AttendanceScreen(
-                            employeeId: employeeId,
-                            employeeName: employeeName,
-                            attendanceType: 'Masuk',
-                          ),
-                        ),
-                      ),
-                    ),
-                    const SizedBox(height: 10),
-                    _HomeMenuCard(
-                      icon: Icons.logout_rounded,
-                      iconColor: AppColors.amber,
-                      iconBg: AppColors.amberBg,
-                      iconBorder: AppColors.amberBorder,
-                      title: 'Absensi Pulang',
-                      subtitle: 'Selfie + lokasi saat selesai kerja',
-                      onTap: () => Navigator.push(
-                        context,
-                        MaterialPageRoute(
-                          builder: (_) => AttendanceScreen(
-                            employeeId: employeeId,
-                            employeeName: employeeName,
-                            attendanceType: 'Pulang',
-                          ),
-                        ),
-                      ),
-                    ),
-                    const SizedBox(height: 10),
-                    _HomeMenuCard(
-                      icon: Icons.history_rounded,
-                      iconColor: AppColors.blue,
-                      iconBg: AppColors.blueBg,
-                      iconBorder: AppColors.blueBorder,
-                      title: 'Riwayat Absensi',
-                      subtitle: 'Lihat catatan absensi pribadi',
-                      onTap: () => ScaffoldMessenger.of(context).showSnackBar(
-                        const SnackBar(
-                          content: Text('Fitur riwayat akan dibuat berikutnya'),
-                        ),
-                      ),
-                    ),
-                    const Spacer(),
-                    Padding(
-                      padding: const EdgeInsets.only(bottom: 20),
-                      child: Text(
-                        'Apotek Bunut • Sistem Absensi v1.0',
-                        style: GoogleFonts.plusJakartaSans(
-                          fontSize: 11,
-                          color: const Color(0x26FFFFFF),
-                        ),
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-            ),
-          ],
+            );
+          },
         ),
       ),
     );
@@ -1458,6 +1711,788 @@ class _SuccessInfoRow extends StatelessWidget {
           ),
         ),
       ],
+    );
+  }
+}
+
+class EmployeeAttendanceHistoryScreen extends StatefulWidget {
+  final int employeeId;
+  final String employeeName;
+
+  const EmployeeAttendanceHistoryScreen({
+    super.key,
+    required this.employeeId,
+    required this.employeeName,
+  });
+
+  @override
+  State<EmployeeAttendanceHistoryScreen> createState() =>
+      _EmployeeAttendanceHistoryScreenState();
+}
+
+class _EmployeeAttendanceHistoryScreenState
+    extends State<EmployeeAttendanceHistoryScreen> {
+  late Future<List<Map<String, dynamic>>> futureAttendances;
+
+  @override
+  void initState() {
+    super.initState();
+    futureAttendances = loadAttendances();
+  }
+
+  Future<List<Map<String, dynamic>>> loadAttendances() {
+    return ApiService.getAttendances(userId: widget.employeeId);
+  }
+
+  Future<void> refreshData() async {
+    setState(() {
+      futureAttendances = loadAttendances();
+    });
+  }
+
+  String getAttendanceType(Map<String, dynamic> record) {
+    return record['attendance_type']?.toString() ?? '-';
+  }
+
+  String getAttendanceDate(Map<String, dynamic> record) {
+    final String rawDate = record['attendance_date']?.toString() ?? '-';
+
+    try {
+      final DateTime parsedDate = DateTime.parse(rawDate);
+      return DateFormat('EEEE, dd MMMM yyyy', 'id_ID').format(parsedDate);
+    } catch (_) {
+      return rawDate;
+    }
+  }
+
+  String getAttendanceTime(Map<String, dynamic> record) {
+    final String rawTime = record['attendance_time']?.toString() ?? '-';
+
+    if (rawTime.length >= 5) {
+      return rawTime.substring(0, 5);
+    }
+
+    return rawTime;
+  }
+
+  String formatCoordinate(dynamic value) {
+    final String rawValue = value?.toString() ?? '-';
+    final double? parsedValue = double.tryParse(rawValue);
+
+    if (parsedValue == null) {
+      return rawValue;
+    }
+
+    return parsedValue.toStringAsFixed(6);
+  }
+
+  Color getTypeColor(String type) {
+    if (type.toLowerCase() == 'masuk') {
+      return AppColors.green;
+    }
+
+    if (type.toLowerCase() == 'pulang') {
+      return AppColors.amber;
+    }
+
+    return AppColors.blue;
+  }
+
+  Color getTypeBg(String type) {
+    if (type.toLowerCase() == 'masuk') {
+      return AppColors.greenBg;
+    }
+
+    if (type.toLowerCase() == 'pulang') {
+      return AppColors.amberBg;
+    }
+
+    return AppColors.blueBg;
+  }
+
+  Color getTypeBorder(String type) {
+    if (type.toLowerCase() == 'masuk') {
+      return AppColors.greenBorder;
+    }
+
+    if (type.toLowerCase() == 'pulang') {
+      return AppColors.amberBorder;
+    }
+
+    return AppColors.blueBorder;
+  }
+
+  IconData getTypeIcon(String type) {
+    if (type.toLowerCase() == 'masuk') {
+      return Icons.login_rounded;
+    }
+
+    if (type.toLowerCase() == 'pulang') {
+      return Icons.logout_rounded;
+    }
+
+    return Icons.assignment_turned_in_rounded;
+  }
+
+  int countByType(List<Map<String, dynamic>> records, String type) {
+    return records
+        .where(
+          (record) =>
+              record['attendance_type']?.toString().toLowerCase() ==
+              type.toLowerCase(),
+        )
+        .length;
+  }
+
+  Widget buildTopBar() {
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(8, 12, 24, 0),
+      child: Row(
+        children: [
+          IconButton(
+            onPressed: () => Navigator.pop(context),
+            icon: const Icon(
+              Icons.arrow_back_ios_new_rounded,
+              size: 18,
+              color: AppColors.textMuted,
+            ),
+          ),
+          const Spacer(),
+          GestureDetector(
+            onTap: refreshData,
+            child: Container(
+              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+              decoration: BoxDecoration(
+                color: AppColors.blueBg,
+                borderRadius: BorderRadius.circular(20),
+                border: Border.all(color: AppColors.blueBorder, width: 0.5),
+              ),
+              child: Row(
+                children: [
+                  const Icon(
+                    Icons.history_rounded,
+                    size: 12,
+                    color: AppColors.blue,
+                  ),
+                  const SizedBox(width: 5),
+                  Text(
+                    'Riwayat Absensi',
+                    style: GoogleFonts.plusJakartaSans(
+                      fontSize: 11,
+                      color: AppColors.blue,
+                      fontWeight: FontWeight.w500,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget buildSummaryCard(List<Map<String, dynamic>> records) {
+    final int masukCount = countByType(records, 'Masuk');
+    final int pulangCount = countByType(records, 'Pulang');
+
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: AppColors.surfaceDark,
+        borderRadius: BorderRadius.circular(14),
+        border: Border.all(color: AppColors.cardBorder, width: 0.5),
+      ),
+      child: Column(
+        children: [
+          Row(
+            children: [
+              Container(
+                width: 44,
+                height: 44,
+                decoration: BoxDecoration(
+                  color: AppColors.blueBg,
+                  borderRadius: BorderRadius.circular(12),
+                  border: Border.all(color: AppColors.blueBorder, width: 0.5),
+                ),
+                child: const Icon(
+                  Icons.person_rounded,
+                  color: AppColors.blue,
+                  size: 20,
+                ),
+              ),
+              const SizedBox(width: 14),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      widget.employeeName,
+                      style: GoogleFonts.plusJakartaSans(
+                        fontSize: 14,
+                        fontWeight: FontWeight.w600,
+                        color: AppColors.textPrimary,
+                        letterSpacing: -0.2,
+                      ),
+                    ),
+                    const SizedBox(height: 2),
+                    Text(
+                      '${records.length} data absensi tersimpan',
+                      style: GoogleFonts.plusJakartaSans(
+                        fontSize: 12,
+                        color: AppColors.textMuted,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 14),
+          Row(
+            children: [
+              Expanded(
+                child: buildMiniStatCard(
+                  title: 'Masuk',
+                  value: masukCount.toString(),
+                  icon: Icons.login_rounded,
+                  color: AppColors.green,
+                  bg: AppColors.greenBg,
+                  border: AppColors.greenBorder,
+                ),
+              ),
+              const SizedBox(width: 10),
+              Expanded(
+                child: buildMiniStatCard(
+                  title: 'Pulang',
+                  value: pulangCount.toString(),
+                  icon: Icons.logout_rounded,
+                  color: AppColors.amber,
+                  bg: AppColors.amberBg,
+                  border: AppColors.amberBorder,
+                ),
+              ),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget buildMiniStatCard({
+    required String title,
+    required String value,
+    required IconData icon,
+    required Color color,
+    required Color bg,
+    required Color border,
+  }) {
+    return Container(
+      padding: const EdgeInsets.all(12),
+      decoration: BoxDecoration(
+        color: bg,
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: border, width: 0.5),
+      ),
+      child: Row(
+        children: [
+          Icon(icon, size: 16, color: color),
+          const SizedBox(width: 8),
+          Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                value,
+                style: GoogleFonts.plusJakartaSans(
+                  fontSize: 17,
+                  fontWeight: FontWeight.w600,
+                  color: color,
+                  letterSpacing: -0.4,
+                ),
+              ),
+              Text(
+                title,
+                style: GoogleFonts.plusJakartaSans(
+                  fontSize: 10,
+                  color: color,
+                  fontWeight: FontWeight.w500,
+                ),
+              ),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget buildAttendanceCard(Map<String, dynamic> record) {
+    final String type = getAttendanceType(record);
+    final String date = getAttendanceDate(record);
+    final String time = getAttendanceTime(record);
+    final String status = record['status']?.toString() ?? '-';
+    final String latitude = formatCoordinate(record['latitude']);
+    final String longitude = formatCoordinate(record['longitude']);
+    final String photoUrl = record['photo_url']?.toString() ?? '';
+
+    final Color typeColor = getTypeColor(type);
+    final Color typeBg = getTypeBg(type);
+    final Color typeBorder = getTypeBorder(type);
+    final bool hasPhoto = photoUrl.isNotEmpty;
+
+    return Container(
+      width: double.infinity,
+      margin: const EdgeInsets.only(bottom: 10),
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: AppColors.surfaceDark,
+        borderRadius: BorderRadius.circular(14),
+        border: Border.all(color: AppColors.cardBorder, width: 0.5),
+      ),
+      child: Column(
+        children: [
+          Row(
+            children: [
+              Container(
+                width: 44,
+                height: 44,
+                decoration: BoxDecoration(
+                  color: typeBg,
+                  borderRadius: BorderRadius.circular(12),
+                  border: Border.all(color: typeBorder, width: 0.5),
+                ),
+                child: Icon(getTypeIcon(type), color: typeColor, size: 20),
+              ),
+              const SizedBox(width: 14),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      'Absensi $type',
+                      style: GoogleFonts.plusJakartaSans(
+                        fontSize: 14,
+                        fontWeight: FontWeight.w600,
+                        color: AppColors.textPrimary,
+                        letterSpacing: -0.2,
+                      ),
+                    ),
+                    const SizedBox(height: 2),
+                    Text(
+                      date,
+                      style: GoogleFonts.plusJakartaSans(
+                        fontSize: 12,
+                        color: AppColors.textMuted,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              Container(
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 10,
+                  vertical: 5,
+                ),
+                decoration: BoxDecoration(
+                  color: typeBg,
+                  borderRadius: BorderRadius.circular(20),
+                  border: Border.all(color: typeBorder, width: 0.5),
+                ),
+                child: Text(
+                  type,
+                  style: GoogleFonts.plusJakartaSans(
+                    fontSize: 11,
+                    color: typeColor,
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
+              ),
+            ],
+          ),
+
+          const SizedBox(height: 14),
+
+          Container(
+            width: double.infinity,
+            padding: const EdgeInsets.all(14),
+            decoration: BoxDecoration(
+              color: const Color(0x0AFFFFFF),
+              borderRadius: BorderRadius.circular(12),
+              border: Border.all(color: AppColors.cardBorder, width: 0.5),
+            ),
+            child: Column(
+              children: [
+                buildHistoryInfoRow(
+                  icon: Icons.access_time_rounded,
+                  iconColor: AppColors.blue,
+                  iconBg: AppColors.blueBg,
+                  label: 'Waktu',
+                  value: time,
+                ),
+                const SizedBox(height: 10),
+                buildHistoryInfoRow(
+                  icon: Icons.location_pin,
+                  iconColor: AppColors.green,
+                  iconBg: AppColors.greenBg,
+                  label: 'Lokasi',
+                  value: 'Lat: $latitude  Lng: $longitude',
+                ),
+                const SizedBox(height: 10),
+                buildHistoryInfoRow(
+                  icon: status.toLowerCase() == 'valid'
+                      ? Icons.verified_rounded
+                      : Icons.info_outline_rounded,
+                  iconColor: status.toLowerCase() == 'valid'
+                      ? AppColors.green
+                      : AppColors.amber,
+                  iconBg: status.toLowerCase() == 'valid'
+                      ? AppColors.greenBg
+                      : AppColors.amberBg,
+                  label: 'Status',
+                  value: status,
+                ),
+              ],
+            ),
+          ),
+
+          if (hasPhoto) ...[
+            const SizedBox(height: 10),
+            Container(
+              width: double.infinity,
+              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+              decoration: BoxDecoration(
+                color: AppColors.blueBg,
+                borderRadius: BorderRadius.circular(10),
+                border: Border.all(color: AppColors.blueBorder, width: 0.5),
+              ),
+              child: Row(
+                children: [
+                  const Icon(
+                    Icons.image_rounded,
+                    size: 15,
+                    color: AppColors.blue,
+                  ),
+                  const SizedBox(width: 8),
+                  Expanded(
+                    child: Text(
+                      'Foto absensi tersimpan',
+                      style: GoogleFonts.plusJakartaSans(
+                        fontSize: 11,
+                        color: AppColors.blue,
+                        fontWeight: FontWeight.w500,
+                      ),
+                    ),
+                  ),
+                  const Icon(
+                    Icons.check_circle_rounded,
+                    size: 15,
+                    color: AppColors.blue,
+                  ),
+                ],
+              ),
+            ),
+          ],
+        ],
+      ),
+    );
+  }
+
+  Widget buildHistoryInfoRow({
+    required IconData icon,
+    required Color iconColor,
+    required Color iconBg,
+    required String label,
+    required String value,
+  }) {
+    return Row(
+      children: [
+        Container(
+          width: 32,
+          height: 32,
+          decoration: BoxDecoration(
+            color: iconBg,
+            borderRadius: BorderRadius.circular(8),
+          ),
+          child: Icon(icon, color: iconColor, size: 16),
+        ),
+        const SizedBox(width: 12),
+        Expanded(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                label,
+                style: GoogleFonts.plusJakartaSans(
+                  fontSize: 11,
+                  color: AppColors.textMuted,
+                ),
+              ),
+              const SizedBox(height: 2),
+              Text(
+                value,
+                maxLines: 2,
+                overflow: TextOverflow.ellipsis,
+                style: GoogleFonts.plusJakartaSans(
+                  fontSize: 13,
+                  fontWeight: FontWeight.w600,
+                  color: AppColors.textPrimary,
+                ),
+              ),
+            ],
+          ),
+        ),
+      ],
+    );
+  }
+
+  Widget buildLoadingState() {
+    return Center(
+      child: Column(
+        mainAxisAlignment: MainAxisAlignment.center,
+        children: [
+          const SizedBox(
+            width: 30,
+            height: 30,
+            child: CircularProgressIndicator(
+              strokeWidth: 2.5,
+              color: AppColors.accent,
+            ),
+          ),
+          const SizedBox(height: 14),
+          Text(
+            'Memuat riwayat absensi...',
+            style: GoogleFonts.plusJakartaSans(
+              fontSize: 13,
+              color: AppColors.textMuted,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget buildEmptyState() {
+    return RefreshIndicator(
+      onRefresh: refreshData,
+      color: AppColors.accent,
+      backgroundColor: AppColors.surfaceDark,
+      child: ListView(
+        physics: const AlwaysScrollableScrollPhysics(),
+        padding: const EdgeInsets.fromLTRB(24, 90, 24, 24),
+        children: [
+          Container(
+            width: double.infinity,
+            padding: const EdgeInsets.all(24),
+            decoration: BoxDecoration(
+              color: AppColors.surfaceDark,
+              borderRadius: BorderRadius.circular(16),
+              border: Border.all(color: AppColors.cardBorder, width: 0.5),
+            ),
+            child: Column(
+              children: [
+                Container(
+                  width: 72,
+                  height: 72,
+                  decoration: BoxDecoration(
+                    color: AppColors.blueBg,
+                    shape: BoxShape.circle,
+                    border: Border.all(color: AppColors.blueBorder, width: 0.5),
+                  ),
+                  child: const Icon(
+                    Icons.history_toggle_off_rounded,
+                    size: 34,
+                    color: AppColors.blue,
+                  ),
+                ),
+                const SizedBox(height: 18),
+                Text(
+                  'Belum Ada Riwayat',
+                  textAlign: TextAlign.center,
+                  style: GoogleFonts.plusJakartaSans(
+                    fontSize: 20,
+                    fontWeight: FontWeight.w600,
+                    color: AppColors.textPrimary,
+                    letterSpacing: -0.4,
+                  ),
+                ),
+                const SizedBox(height: 8),
+                Text(
+                  'Riwayat absensi kamu akan muncul di sini setelah melakukan absensi masuk atau pulang.',
+                  textAlign: TextAlign.center,
+                  style: GoogleFonts.plusJakartaSans(
+                    fontSize: 13,
+                    color: AppColors.textMuted,
+                    height: 1.5,
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget buildErrorState(Object error) {
+    return RefreshIndicator(
+      onRefresh: refreshData,
+      color: AppColors.accent,
+      backgroundColor: AppColors.surfaceDark,
+      child: ListView(
+        physics: const AlwaysScrollableScrollPhysics(),
+        padding: const EdgeInsets.fromLTRB(24, 90, 24, 24),
+        children: [
+          Container(
+            width: double.infinity,
+            padding: const EdgeInsets.all(24),
+            decoration: BoxDecoration(
+              color: AppColors.surfaceDark,
+              borderRadius: BorderRadius.circular(16),
+              border: Border.all(color: AppColors.cardBorder, width: 0.5),
+            ),
+            child: Column(
+              children: [
+                Container(
+                  width: 72,
+                  height: 72,
+                  decoration: BoxDecoration(
+                    color: AppColors.amberBg,
+                    shape: BoxShape.circle,
+                    border: Border.all(
+                      color: AppColors.amberBorder,
+                      width: 0.5,
+                    ),
+                  ),
+                  child: const Icon(
+                    Icons.error_outline_rounded,
+                    size: 34,
+                    color: AppColors.amber,
+                  ),
+                ),
+                const SizedBox(height: 18),
+                Text(
+                  'Gagal Memuat Riwayat',
+                  textAlign: TextAlign.center,
+                  style: GoogleFonts.plusJakartaSans(
+                    fontSize: 20,
+                    fontWeight: FontWeight.w600,
+                    color: AppColors.textPrimary,
+                    letterSpacing: -0.4,
+                  ),
+                ),
+                const SizedBox(height: 8),
+                Text(
+                  error.toString().replaceFirst('Exception: ', ''),
+                  textAlign: TextAlign.center,
+                  style: GoogleFonts.plusJakartaSans(
+                    fontSize: 13,
+                    color: AppColors.textMuted,
+                    height: 1.5,
+                  ),
+                ),
+                const SizedBox(height: 20),
+                SizedBox(
+                  width: double.infinity,
+                  height: 48,
+                  child: ElevatedButton.icon(
+                    onPressed: refreshData,
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: AppColors.accent,
+                      foregroundColor: Colors.white,
+                      elevation: 0,
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(10),
+                      ),
+                    ),
+                    icon: const Icon(Icons.refresh_rounded, size: 18),
+                    label: Text(
+                      'Coba Lagi',
+                      style: GoogleFonts.plusJakartaSans(
+                        fontSize: 14,
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget buildHistoryList(List<Map<String, dynamic>> records) {
+    return RefreshIndicator(
+      onRefresh: refreshData,
+      color: AppColors.accent,
+      backgroundColor: AppColors.surfaceDark,
+      child: ListView(
+        physics: const AlwaysScrollableScrollPhysics(),
+        padding: const EdgeInsets.fromLTRB(24, 20, 24, 24),
+        children: [
+          buildSummaryCard(records),
+          const SizedBox(height: 24),
+          Text(
+            'CATATAN ABSENSI',
+            style: GoogleFonts.plusJakartaSans(
+              fontSize: 10,
+              fontWeight: FontWeight.w600,
+              color: AppColors.textMuted,
+              letterSpacing: 1.2,
+            ),
+          ),
+          const SizedBox(height: 12),
+          ...records.map(buildAttendanceCard),
+          const SizedBox(height: 10),
+          Center(
+            child: Text(
+              'Tarik ke bawah untuk memperbarui data',
+              style: GoogleFonts.plusJakartaSans(
+                fontSize: 11,
+                color: const Color(0x26FFFFFF),
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      backgroundColor: AppColors.bgDark,
+      body: SafeArea(
+        child: Column(
+          children: [
+            buildTopBar(),
+            Expanded(
+              child: FutureBuilder<List<Map<String, dynamic>>>(
+                future: futureAttendances,
+                builder: (context, snapshot) {
+                  if (snapshot.connectionState == ConnectionState.waiting) {
+                    return buildLoadingState();
+                  }
+
+                  if (snapshot.hasError) {
+                    return buildErrorState(snapshot.error!);
+                  }
+
+                  final List<Map<String, dynamic>> records =
+                      snapshot.data ?? [];
+
+                  if (records.isEmpty) {
+                    return buildEmptyState();
+                  }
+
+                  return buildHistoryList(records);
+                },
+              ),
+            ),
+          ],
+        ),
+      ),
     );
   }
 }

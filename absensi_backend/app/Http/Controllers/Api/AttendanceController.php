@@ -63,27 +63,31 @@ class AttendanceController extends Controller
     ], 201);
 }
 
-    public function index(Request $request)
-    {
-        $query = Attendance::with('user')->latest();
+   public function index(Request $request)
+{
+    $query = Attendance::with('user')
+        ->orderBy('attendance_date', 'desc')
+        ->orderBy('attendance_time', 'desc');
 
-        if ($request->filled('month')) {
-            $query->whereMonth('attendance_date', $request->month);
-        }
-
-        if ($request->filled('year')) {
-            $query->whereYear('attendance_date', $request->year);
-        }
-
-        if ($request->filled('user_id')) {
-            $query->where('user_id', $request->user_id);
-        }
-
-        return response()->json([
-            'message' => 'Data absensi berhasil diambil',
-            'data' => $query->get(),
-        ]);
+    if ($request->filled('user_id')) {
+        $query->where('user_id', $request->user_id);
     }
+
+    if ($request->filled('month')) {
+        $query->whereMonth('attendance_date', $request->month);
+    }
+
+    if ($request->filled('year')) {
+        $query->whereYear('attendance_date', $request->year);
+    }
+
+    $attendances = $query->get();
+
+    return response()->json([
+        'message' => 'Data absensi berhasil diambil',
+        'data' => $attendances,
+    ]);
+}
 
     public function summary()
     {
